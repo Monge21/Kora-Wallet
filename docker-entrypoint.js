@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process')
 
 const env = { ...process.env }
+const PORT = process.env.PORT || 3000;
 
 ;(async() => {
   // If running the web server then prerender pages
