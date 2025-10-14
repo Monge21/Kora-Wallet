@@ -12,14 +12,16 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 
 export default function InstallPage() {
   const [shop, setShop] = useState('');
+  const [isInstalling, setIsInstalling] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (shop) {
+      setIsInstalling(true);
       window.location.href = `/api/auth/shopify?shop=${shop}`;
     }
   };
@@ -45,6 +47,7 @@ export default function InstallPage() {
                 value={shop}
                 onChange={(e) => setShop(e.target.value)}
                 required
+                disabled={isInstalling}
               />
               <p className="text-xs text-muted-foreground">
                 Example: your-store.myshopify.com
@@ -52,9 +55,18 @@ export default function InstallPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Install App
+            <Button type="submit" className="w-full" disabled={isInstalling || !shop}>
+              {isInstalling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Redirecting...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Install App
+                </>
+              )}
             </Button>
           </CardFooter>
         </form>

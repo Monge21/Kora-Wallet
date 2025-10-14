@@ -1,14 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeFirebase } from '@/firebase/server';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { cookies } from 'next/headers';
 
+// Callback para instalar la app en Shopify
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const shop = searchParams.get('shop');
-  const state = searchParams.get('state');
-
-  // TODO: Verify the state parameter to prevent CSRF attacks
 
   if (!code || !shop) {
     return NextResponse.json({ error: 'Missing code or shop parameter' }, { status: 400 });
@@ -22,45 +21,38 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Obtener access token desde Shopify
     const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: apiKey,
-        client_secret: apiSecret,
-        code,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: apiKey, client_secret: apiSecret, code }),
     });
-
     const data = await response.json();
     const accessToken = data.access_token;
 
     if (!accessToken) {
-      console.error('Failed to get access token:', data);
       return NextResponse.json({ error: 'Failed to retrieve access token' }, { status: 500 });
     }
 
+    // Inicializar Firebase Admin
     const { firestore } = initializeFirebase();
-    const shopsCollection = collection(firestore, 'shops');
 
-    // Check if the shop already exists
-    const q = query(shopsCollection, where('domain', '==', shop));
-    const querySnapshot = await getDocs(q);
+    // ⚡ Usamos la línea de import que pediste, pero con Admin SDK
+    const shopsCollection = firestore.collection('shops');
+
+    // Verificar si la tienda ya existe
+    const q = shopsCollection.where('domain', '==', shop);
+    const querySnapshot = await q.get();
 
     if (querySnapshot.empty) {
-      // Get shop details from Shopify
+      // Obtener información de la tienda desde Shopify
       const shopDetailsResponse = await fetch(`https://${shop}/admin/api/2023-10/shop.json`, {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-        },
+        headers: { 'X-Shopify-Access-Token': accessToken },
       });
-      const shopDetailsData = await shopDetailsResponse.json();
-      const shopInfo = shopDetailsData.shop;
+      const shopInfo = (await shopDetailsResponse.json()).shop;
 
-      // Shop doesn't exist, create a new document
-      await addDoc(shopsCollection, {
+      // Crear un nuevo documento en Firestore
+      await shopsCollection.add({
         shopifyStoreId: shopInfo.id,
         name: shopInfo.name,
         domain: shop,
@@ -68,13 +60,22 @@ export async function GET(request: NextRequest) {
         createdAt: serverTimestamp(),
       });
     } else {
-      // Potentially update the existing document if needed, e.g., new access token
+      // Si ya existe, puedes actualizar el access token si quieres
       const docId = querySnapshot.docs[0].id;
-      // For simplicity, we are not updating the token here, but you might want to.
+      // Ejemplo de actualización:
+      // await shopsCollection.doc(docId).update({ accessToken, updatedAt: serverTimestamp() });
     }
 
-    // Redirect to the app's dashboard
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_HOST}/dashboard`);
+    // Guardar el shop en una cookie segura para todas las páginas
+    (await cookies()).set('shop', shop, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+
+    // Redirigir al dashboard
+    const redirectUrl = new URL(`${process.env.NEXT_PUBLIC_HOST}/dashboard`);
+    return NextResponse.redirect(redirectUrl);
 
   } catch (error) {
     console.error('Callback error:', error);

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -15,8 +14,6 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { createSubscription } from '@/app/actions/shopify';
 import { useToast } from '@/hooks/use-toast';
-import { useSearchParams } from 'next/navigation';
-
 
 type Plan = 'Basic' | 'Growth' | 'Pro';
 
@@ -62,19 +59,17 @@ const plans = [
   },
 ];
 
-export default function PricingPage() {
+export default function PricingPage({ shop }: { shop: string }) {
   const [selectedPlan, setSelectedPlan] = useState<Plan>('Growth');
   const [isLoading, setIsLoading] = useState<Plan | null>(null);
   const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const shop = searchParams.get('shop');
 
   const handlePlanSelection = async (planName: Plan) => {
     if (!shop) {
       toast({
         variant: 'destructive',
         title: 'Shop not found',
-        description: 'The shop domain is missing from the URL.',
+        description: 'The shop domain is missing. Please try reinstalling the app.',
       });
       return;
     }
@@ -84,7 +79,7 @@ export default function PricingPage() {
       const response = await createSubscription(planName.toUpperCase() as 'BASIC' | 'GROWTH' | 'PRO', shop);
       if (response.confirmationUrl) {
         // Redirect the user to Shopify to confirm the subscription
-        window.top.location.href = response.confirmationUrl;
+        window.top!.location.href = response.confirmationUrl;
       } else {
         throw new Error(response.error || 'Failed to create subscription.');
       }

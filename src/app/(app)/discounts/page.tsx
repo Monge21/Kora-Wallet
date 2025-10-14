@@ -60,6 +60,7 @@ export default function DiscountsPage({ shop }: { shop: string }) {
   const { toast } = useToast();
 
   const fetchDiscounts = async () => {
+    if (!shop) return;
     setIsLoading(true);
     try {
       const fetchedDiscounts = await getDiscountCodes(shop);
@@ -76,9 +77,7 @@ export default function DiscountsPage({ shop }: { shop: string }) {
   };
 
   useEffect(() => {
-    if (shop) {
-      fetchDiscounts();
-    }
+    fetchDiscounts();
   }, [shop]);
 
   const handleCreateDiscount = async () => {
@@ -137,7 +136,7 @@ export default function DiscountsPage({ shop }: { shop: string }) {
               <DialogHeader>
                 <DialogTitle>Create Discount</DialogTitle>
                 <DialogDescription>
-                  Create a new discount code for your customers.
+                  Create a new discount code for your customers. This will create a real discount in your Shopify store.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -186,7 +185,7 @@ export default function DiscountsPage({ shop }: { shop: string }) {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateDiscount} disabled={isCreating}>
+                <Button onClick={handleCreateDiscount} disabled={isCreating || !newDiscount.code || !newDiscount.value}>
                   {isCreating ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</>
                   ) : (

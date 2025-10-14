@@ -1,14 +1,19 @@
-
 'use server';
 
 import { initializeFirebase } from '@/firebase/server';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 
-async function getShopData(shopDomain: string) {
+type ShopData = {
+  id: string;
+  accessToken: string;
+  domain: string;
+  ref: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData, FirebaseFirestore.DocumentData>;
+  [key: string]: any;
+};
+
+async function getShopData(shopDomain: string): Promise<ShopData> {
   const { firestore } = initializeFirebase();
-  const shopsCollection = collection(firestore, 'shops');
-  const q = query(shopsCollection, where('domain', '==', shopDomain));
-  const querySnapshot = await getDocs(q);
+  const shopsCollection = firestore.collection('shops');
+  const querySnapshot = await shopsCollection.where('domain', '==', shopDomain).get();
 
   if (querySnapshot.empty) {
     throw new Error(`Shop not found for domain: ${shopDomain}`);
@@ -23,6 +28,8 @@ async function getShopData(shopDomain: string) {
   
   return {
     id: shopDoc.id,
+    accessToken: shopData.accessToken,
+    domain: shopData.domain,
     ...shopData,
     ref: shopDoc.ref,
   };
@@ -216,13 +223,16 @@ export async function getDiscountCodes(shopDomain: string, count: number = 20): 
     const response = await shopifyFetch(shopDomain, GET_DISCOUNT_CODES_QUERY, { "first": count });
     
     return response.codeDiscountNodes.edges.map((edge: any) => {
-        const title = edge.node.codeDiscount.title;
+        const discountNode = edge.node;
+        const codeDiscount = discountNode.codeDiscount;
+        // The discount code is part of the ID in the format 'gid://shopify/DiscountCodeNode/12345'
+        // and the actual title is what the user sees. We use title for both code and title for simplicity here.
         return {
-            id: edge.node.id,
-            code: title,
-            title: title,
-            status: edge.node.codeDiscount.status,
-            usageCount: edge.node.codeDiscount.asyncUsageCount,
+            id: discountNode.id,
+            code: codeDiscount.title,
+            title: codeDiscount.title,
+            status: codeDiscount.status,
+            usageCount: codeDiscount.asyncUsageCount,
         }
     });
 
@@ -262,6 +272,9 @@ export async function createDiscountCode(shopDomain: string, discount: CreateDis
 
     let customerGets;
     if (discount.type === 'PERCENTAGE') {
+        if (discount.value <= 0 || discount.value > 100) {
+            throw new Error('Percentage value must be between 0 and 100.');
+        }
         customerGets = {
             value: { percentage: discount.value / 100 },
             items: { all: true }
@@ -270,7 +283,7 @@ export async function createDiscountCode(shopDomain: string, discount: CreateDis
         customerGets = {
             value: { 
                 discountAmount: { 
-                    amount: discount.value.toString(),
+                    amount: discount.value.toFixed(2), // API requires amount as a string
                     // This is a simplification. A robust implementation would fetch the shop's currency.
                     currencyCode: 'USD' 
                 } 
