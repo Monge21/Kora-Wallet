@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     if (querySnapshot.empty) {
       // Obtener información de la tienda desde Shopify
-      const shopDetailsResponse = await fetch(`https://${shop}/admin/api/2023-10/shop.json`, {
+      const shopDetailsResponse = await fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
         headers: { 'X-Shopify-Access-Token': accessToken },
       });
       const shopInfo = (await shopDetailsResponse.json()).shop;
