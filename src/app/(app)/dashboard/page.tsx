@@ -3,8 +3,7 @@ import {
   TrendingUp,
   CreditCard,
   Activity,
-  Sparkles,
-  Bell,
+  BarChart,
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -25,27 +24,6 @@ import {
 } from '@/components/ui/table';
 import { SalesChart } from '@/components/dashboard/sales-chart';
 import { getDashboardData, type ShopifyDashboardData } from '@/app/actions/shopify-data';
-
-const alerts = [
-  {
-    title: 'High-performing product detected',
-    description: 'Consider increasing the price of "Premium Organic Coffee Beans" by 10% to maximize profit.',
-    icon: Sparkles,
-    type: 'suggestion',
-  },
-  {
-    title: 'Low stock warning for "Artisan Mug"',
-    description: 'Only 15 units left. Restock soon to avoid losing sales.',
-    icon: Bell,
-    type: 'warning',
-  },
-  {
-    title: 'New AOV optimization available',
-    description: 'Bundle "Coffee Beans" with "Artisan Mug" for a 15% discount to increase average order value.',
-    icon: Sparkles,
-    type: 'suggestion',
-  },
-];
 
 function formatCurrency(amount: string, currency: string) {
   return new Intl.NumberFormat('en-US', {
@@ -82,8 +60,8 @@ export default async function DashboardPage({ plan, shop }: { plan: 'basic' | 'g
     },
     {
       title: 'Conversion Rate',
-      value: '3.45%', // This metric is complex to calculate and is left as a placeholder
-      change: '+1.5% from last month',
+      value: '0.00%', // This metric is complex to calculate and is left as a placeholder
+      change: 'from last month',
       icon: Activity,
     },
   ];
@@ -106,7 +84,7 @@ export default async function DashboardPage({ plan, shop }: { plan: 'basic' | 'g
       </div>
       <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <SalesChart />
+          <SalesChart data={[]} />
         </div>
         <Card>
           <CardHeader>
@@ -116,19 +94,14 @@ export default async function DashboardPage({ plan, shop }: { plan: 'basic' | 'g
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            {alerts.map((alert) => (
-              <div key={alert.title} className="flex items-start gap-4">
-                <div className={`mt-1 flex h-8 w-8 items-center justify-center rounded-lg ${alert.type === 'suggestion' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-yellow-100 dark:bg-yellow-900/50'}`}>
-                    <alert.icon className={`h-4 w-4 ${alert.type === 'suggestion' ? 'text-accent-foreground' : 'text-yellow-600 dark:text-yellow-400'}`} />
+             <div className="flex h-full min-h-[200px] items-center justify-center rounded-lg border-2 border-dashed">
+                <div className="text-center">
+                    <BarChart className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        No recommendations yet.
+                    </p>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{alert.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {alert.description}
-                  </p>
-                </div>
-              </div>
-            ))}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -148,29 +121,30 @@ export default async function DashboardPage({ plan, shop }: { plan: 'basic' | 'g
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dashboardData && dashboardData.recentSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={sale.avatar} alt="Avatar" data-ai-hint="person" />
-                        <AvatarFallback>{sale.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="grid gap-0.5">
-                        <div className="font-medium">{sale.name}</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          {sale.email}
+              {dashboardData && dashboardData.recentSales.length > 0 ? (
+                dashboardData.recentSales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={sale.avatar} alt="Avatar" data-ai-hint="person" />
+                          <AvatarFallback>{sale.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="grid gap-0.5">
+                          <div className="font-medium">{sale.name}</div>
+                          <div className="hidden text-sm text-muted-foreground md:inline">
+                            {sale.email}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">{formatCurrency(sale.amount, sale.currencyCode)}</TableCell>
-                </TableRow>
-              ))}
-               {!dashboardData && (
+                    </TableCell>
+                    <TableCell className="text-right">{formatCurrency(sale.amount, sale.currencyCode)}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center">
-                    Could not load sales data.
+                  <TableCell colSpan={2} className="h-24 text-center">
+                    No recent sales to display.
                   </TableCell>
                 </TableRow>
               )}
