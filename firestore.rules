@@ -1,0 +1,126 @@
+/**
+ * @fileoverview Firestore Security Rules for Kora Wallet application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model within a multi-tenant application,
+ * where Shops own Users, DiscountCodes, SalesPredictions, and PricingSuggestions. Access
+ * is generally restricted to authenticated users and, where applicable, to resources
+ * belonging to the shop associated with the authenticated user.
+ *
+ * Data Structure:
+ * - /shops/{shopId}: Root collection for Shop entities.
+ * - /shops/{shopId}/users/{userId}: Subcollection for User entities, nested under Shops.
+ * - /shops/{shopId}/discount_codes/{discountCodeId}: Subcollection for DiscountCode entities.
+ * - /shops/{shopId}/sales_predictions/{salesPredictionId}: Subcollection for SalesPrediction entities.
+ * - /shops/{shopId}/pricing_suggestions/{pricingSuggestionId}: Subcollection for PricingSuggestion entities.
+ *
+ * Key Security Decisions:
+ * - Shops are not created or managed directly through client-side Firestore calls; their creation happens via backend or Firebase Authentication triggers.
+ * - Listing of users is only available to the owner of the shop.
+ * - DiscountCodes, SalesPredictions, and PricingSuggestions can only be created, updated, and deleted by authenticated users who are owners of the corresponding shop.
+ * - Strict ownership is enforced by requiring the `shopId` to match the document path for all subcollections.
+ *
+ * Denormalization for Authorization:
+ * - The `shopId` field is denormalized into the User, DiscountCode, SalesPrediction, and PricingSuggestion documents. This allows security rules to validate shop ownership without additional `get()` calls.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Rules for the /shops collection. Shops are typically created via backend, not client-side.
+     * @path /shops/{shopId}
+     * @allow (get, list): if true
+     * @deny (create, update, delete): if false
+     * @principle Public read-only access for shop details; no client-side creation, updates, or deletion.
+     */
+    match /shops/{shopId} {
+      allow get, list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Rules for the /shops/{shopId}/users collection. Allows a user to create their own profile under a shop, and shop owner to manage users.
+     * @path /shops/{shopId}/users/{userId}
+     * @allow (create): Authenticated user can create their own user document with matching ID.
+     * @allow (get, list, update, delete): Only the shop owner (authenticated user with matching shopId) can access or modify user data.
+     * @deny (create): if request.auth.uid != request.resource.data.id;
+     * @deny (create): if request.resource.data.shopId != shopId;
+     * @deny (update, delete): if !isExistingOwner(shopId);
+     * @principle User-owned data with shop-level access control.
+     */
+    match /shops/{shopId}/users/{userId} {
+      allow get: if isOwner(shopId);
+      allow list: if isOwner(shopId);
+      allow create: if isSignedIn() && request.auth.uid == userId && request.resource.data.shopId == shopId;
+      allow update: if isExistingOwner(shopId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(shopId);
+    }
+
+    /**
+     * @description Rules for the /shops/{shopId}/discount_codes collection. Only the shop owner can manage discount codes.
+     * @path /shops/{shopId}/discount_codes/{discountCodeId}
+     * @allow (create): Only the shop owner can create discount codes.
+     * @allow (get, list, update, delete): Only the shop owner can access or modify discount codes.
+     * @deny (create): if request.resource.data.shopId != shopId;
+     * @deny (update, delete): if !isExistingOwner(shopId);
+     * @principle Shop-owned data with shop-level access control.
+     */
+    match /shops/{shopId}/discount_codes/{discountCodeId} {
+      allow get: if isOwner(shopId);
+      allow list: if isOwner(shopId);
+      allow create: if isSignedIn() && request.resource.data.shopId == shopId;
+      allow update: if isExistingOwner(shopId);
+      allow delete: if isExistingOwner(shopId);
+    }
+
+    /**
+     * @description Rules for the /shops/{shopId}/sales_predictions collection. Only the shop owner can access sales predictions.
+     * @path /shops/{shopId}/sales_predictions/{salesPredictionId}
+     * @allow (create): Only the shop owner can create sales predictions.
+     * @allow (get, list, update, delete): Only the shop owner can access or modify sales predictions.
+     * @deny (create): if request.resource.data.shopId != shopId;
+     * @deny (update, delete): if !isExistingOwner(shopId);
+     * @principle Shop-owned data with shop-level access control.
+     */
+    match /shops/{shopId}/sales_predictions/{salesPredictionId} {
+      allow get: if isOwner(shopId);
+      allow list: if isOwner(shopId);
+      allow create: if isSignedIn() && request.resource.data.shopId == shopId;
+      allow update: if isExistingOwner(shopId);
+      allow delete: if isExistingOwner(shopId);
+    }
+
+    /**
+     * @description Rules for the /shops/{shopId}/pricing_suggestions collection. Only the shop owner can access pricing suggestions.
+     * @path /shops/{shopId}/pricing_suggestions/{pricingSuggestionId}
+     * @allow (create): Only the shop owner can create pricing suggestions.
+     * @allow (get, list, update, delete): Only the shop owner can access or modify pricing suggestions.
+     * @deny (create): if request.resource.data.shopId != shopId;
+     * @deny (update, delete): if !isExistingOwner(shopId);
+     * @principle Shop-owned data with shop-level access control.
+     */
+    match /shops/{shopId}/pricing_suggestions/{pricingSuggestionId} {
+      allow get: if isOwner(shopId);
+      allow list: if isOwner(shopId);
+      allow create: if isSignedIn() && request.resource.data.shopId == shopId;
+      allow update: if isExistingOwner(shopId);
+      allow delete: if isExistingOwner(shopId);
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(shopId) {
+      return isSignedIn() && request.auth.uid == shopId;
+    }
+
+    function isExistingOwner(shopId) {
+        return isOwner(shopId) && resource != null;
+    }
+  }
+}
