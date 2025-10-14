@@ -12,7 +12,8 @@ const PORT = process.env.PORT || 3000;
   }
 
   // launch application
-  await exec(process.argv.slice(2).join(' '))
+  const command = process.argv.slice(2).join(' ').replace(/\$PORT/g, PORT)
+  await exec(command)
 })()
 
 function exec(command) {
