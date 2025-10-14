@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -138,7 +137,7 @@ export default function DiscountsPage({ shop }: { shop: string }) {
               <DialogHeader>
                 <DialogTitle>Create Discount</DialogTitle>
                 <DialogDescription>
-                  Create a new discount code for your customers. This will create a real discount in your Shopify store.
+                  Create a new discount code for your customers.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
