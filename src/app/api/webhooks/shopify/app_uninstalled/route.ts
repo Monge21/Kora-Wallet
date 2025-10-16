@@ -1,34 +1,25 @@
-
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeFirebase } from '@/firebase/server';
-import { collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-import crypto from 'crypto';
+import { verifyShopifyHmac } from '@/lib/shopify-hmac';
 
 export async function POST(request: NextRequest) {
-  const hmac = request.headers.get('x-shopify-hmac-sha256');
   const shopDomain = request.headers.get('x-shopify-shop-domain');
-  const body = await request.text();
+  
+  // Get raw body as a string for HMAC validation
+  const rawBody = await request.text();
 
-  if (!hmac || !shopDomain || !body) {
-    return NextResponse.json({ error: 'Missing headers' }, { status: 400 });
+  if (!shopDomain) {
+    return NextResponse.json({ error: 'Missing x-shopify-shop-domain header' }, { status: 400 });
   }
 
   // Verify the webhook came from Shopify
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) {
-    console.error('Shopify webhook secret is not configured.');
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-
-  const hash = crypto
-    .createHmac('sha256', secret)
-    .update(body, 'utf8')
-    .digest('base64');
-  
-  const generatedHmac = Buffer.from(hash);
-  const receivedHmac = Buffer.from(hmac);
-
-  if (!crypto.timingSafeEqual(generatedHmac, receivedHmac)) {
+  try {
+    await verifyShopifyHmac(request.headers, rawBody);
+  } catch (error) {
+    if (error instanceof Error) {
+        console.error('Webhook HMAC validation failed:', error.message);
+        return NextResponse.json({ error: 'Unauthorized: ' + error.message }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -36,13 +27,13 @@ export async function POST(request: NextRequest) {
   try {
     console.log(`App uninstalled for ${shopDomain}. Cleaning up data.`);
     const { firestore } = initializeFirebase();
-    const shopsCollection = collection(firestore, 'shops');
-    const q = query(shopsCollection, where('domain', '==', shopDomain));
-    const querySnapshot = await getDocs(q);
+    const shopsCollection = firestore.collection('shops');
+    const q = shopsCollection.where('domain', '==', shopDomain);
+    const querySnapshot = await q.get();
 
     if (!querySnapshot.empty) {
       const shopDocRef = querySnapshot.docs[0].ref;
-      await deleteDoc(shopDocRef);
+      await shopDocRef.delete();
       console.log(`Successfully deleted data for shop: ${shopDomain}`);
     } else {
       console.warn(`Received uninstall webhook for a shop not found in the database: ${shopDomain}`);

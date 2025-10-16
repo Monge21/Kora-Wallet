@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeFirebase } from '@/firebase/server';
-import { collection, query, where, getDocs, updateDoc, getDoc } from 'firebase/firestore';
 
 async function shopifyFetch(shopDomain: string, accessToken: string, query: string, variables: Record<string, any> = {}) {
     const response = await fetch(`https://${shopDomain}/admin/api/2024-04/graphql.json`, {
@@ -22,16 +21,13 @@ async function shopifyFetch(shopDomain: string, accessToken: string, query: stri
     return result.data;
 }
 
-const ACTIVATE_SUBSCRIPTION_MUTATION = `
-  mutation AppSubscriptionActivate($id: ID!) {
-    appSubscriptionActivate(id: $id) {
-      userErrors {
-        field
-        message
-      }
-      appSubscription {
+const CHECK_SUBSCRIPTION_QUERY = `
+  query appSubscription($id: ID!) {
+    node(id: $id) {
+      ... on AppSubscription {
         id
         status
+        name
       }
     }
   }
@@ -50,16 +46,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const { firestore } = initializeFirebase();
-    const shopsCollection = collection(firestore, 'shops');
-    const q = query(shopsCollection, where('domain', '==', shopDomain));
-    const querySnapshot = await getDocs(q);
+    const shopsCollection = firestore.collection('shops');
+    const q = shopsCollection.where('domain', '==', shopDomain);
+    const querySnapshot = await q.get();
 
     if (querySnapshot.empty) {
       throw new Error('Shop not found in database.');
     }
 
     const shopDocRef = querySnapshot.docs[0].ref;
-    const shopDoc = await getDoc(shopDocRef);
+    const shopDoc = await shopDocRef.get();
     const shopData = shopDoc.data();
 
     if (!shopData || !shopData.accessToken) {
@@ -69,32 +65,34 @@ export async function GET(request: NextRequest) {
     // This is the App Subscription ID from Shopify, e.g. "gid://shopify/AppSubscription/12345"
     const subscriptionGid = `gid://shopify/AppSubscription/${chargeId}`;
 
-    // Activate the subscription with Shopify
-    const activationData = await shopifyFetch(
-        shopDomain, 
-        shopData.accessToken, 
-        ACTIVATE_SUBSCRIPTION_MUTATION, 
+    // **CRITICAL STEP**: Verify the subscription is active with Shopify
+    const verificationData = await shopifyFetch(
+        shopDomain,
+        shopData.accessToken,
+        CHECK_SUBSCRIPTION_QUERY,
         { id: subscriptionGid }
     );
     
-    const activatedSubscription = activationData.appSubscriptionActivate.appSubscription;
-    const userErrors = activationData.appSubscriptionActivate.userErrors;
+    const subscriptionNode = verificationData.node;
 
-    if (userErrors.length > 0) {
-        throw new Error(`Error activating subscription: ${userErrors[0].message}`);
-    }
-
-    if (activatedSubscription && activatedSubscription.status === 'ACTIVE') {
-        // Update Firestore with the new plan and charge ID
-        await updateDoc(shopDocRef, {
+    if (subscriptionNode && subscriptionNode.status === 'ACTIVE') {
+        // Subscription is confirmed active. Update Firestore.
+        await shopDocRef.update({
             plan: plan.toLowerCase(),
             chargeId: chargeId,
+            // You can also store the GID for future reference
+            subscriptionGid: subscriptionGid,
         });
 
         // Redirect to the dashboard on successful activation
-        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_HOST}/dashboard`);
+        // Add a query param to show a success message if desired
+        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_HOST}/dashboard?billing_success=true`);
     } else {
-        throw new Error('Subscription could not be activated.');
+        // This can happen if the user declines, or if there's an issue.
+        // The subscription might not be active, or it might already be active from a previous attempt.
+        // It's safest to send them back to pricing with an informational error.
+        console.warn('Subscription status was not ACTIVE after confirmation:', subscriptionNode?.status);
+        throw new Error(`Subscription could not be confirmed. Status: ${subscriptionNode?.status || 'UNKNOWN'}`);
     }
 
   } catch (error) {
@@ -103,4 +101,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_HOST}/pricing?error=${encodeURIComponent(errorMessage)}`);
   }
 }
+
+
 

@@ -1,7 +1,7 @@
 'use server';
 
 import { initializeFirebase } from '@/firebase/server';
-import { collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { CollectionReference } from 'firebase-admin/firestore';
 
 const PLAN_DETAILS = {
   BASIC: { name: 'Basic Plan', monthlyPrice: 10.0, annualPrice: 96.0 },
@@ -13,9 +13,9 @@ type BillingInterval = 'EVERY_30_DAYS' | 'ANNUAL';
 
 async function getShopData(shopDomain: string) {
   const { firestore } = initializeFirebase();
-  const shopsCollection = collection(firestore, 'shops');
-  const q = query(shopsCollection, where('domain', '==', shopDomain));
-  const querySnapshot = await getDocs(q);
+  const shopsCollection = firestore.collection('shops') as CollectionReference<{domain: string, accessToken: string}>;
+  const q = shopsCollection.where('domain', '==', shopDomain);
+  const querySnapshot = await q.get();
 
   if (querySnapshot.empty) {
     throw new Error('Shop not found.');

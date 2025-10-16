@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeFirebase } from '@/firebase/server';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { cookies } from 'next/headers';
 
 // Callback para instalar la app en Shopify
@@ -36,11 +36,11 @@ export async function GET(request: NextRequest) {
 
     // Inicializar Firebase Admin
     const { firestore } = initializeFirebase();
-    const shopsCollection = collection(firestore, 'shops');
+    const shopsCollection = firestore.collection('shops');
 
     // Verificar si la tienda ya existe
-    const q = query(shopsCollection, where('domain', '==', shop));
-    const querySnapshot = await getDocs(q);
+    const q = shopsCollection.where('domain', '==', shop);
+    const querySnapshot = await q.get();
 
     if (querySnapshot.empty) {
       // Obtener información de la tienda desde Shopify
@@ -50,21 +50,21 @@ export async function GET(request: NextRequest) {
       const shopInfo = (await shopDetailsResponse.json()).shop;
 
       // Crear un nuevo documento en Firestore
-      await addDoc(shopsCollection, {
+      await shopsCollection.add({
         shopifyStoreId: shopInfo.id,
         name: shopInfo.name,
         domain: shop,
         accessToken,
-        createdAt: serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         plan: 'basic', // Default plan on install
         chargeId: '',   // Default chargeId on install
       });
     } else {
       // Si ya existe, actualiza el access token y la fecha de actualización
       const docRef = querySnapshot.docs[0].ref;
-      await updateDoc(docRef, { 
+      await docRef.update({ 
         accessToken, 
-        updatedAt: serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         plan: 'basic', // Reset plan on reinstall
         chargeId: '',   // Reset chargeId on reinstall
       });
