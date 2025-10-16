@@ -22,7 +22,8 @@ const planHierarchy: Record<Plan, number> = {
 };
 
 export function PlanGuard({ userPlan, requiredPlan, shop, children, featureName }: PlanGuardProps) {
-  const userLevel = planHierarchy[userPlan] || 1;
+  const currentPlan = userPlan || 'basic';
+  const userLevel = planHierarchy[currentPlan];
   const requiredLevel = planHierarchy[requiredPlan];
 
   if (userLevel >= requiredLevel) {
@@ -43,7 +44,7 @@ export function PlanGuard({ userPlan, requiredPlan, shop, children, featureName 
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground mb-4">
-            You are currently on the &quot;{userPlan.charAt(0).toUpperCase() + userPlan.slice(1)}&quot; plan. Please upgrade your plan to access this feature.
+            You are currently on the &quot;{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}&quot; plan. Please upgrade your plan to access this feature.
           </p>
           <Button asChild>
             <Link href={`/pricing?shop=${shop}`}>View Plans & Upgrade</Link>
