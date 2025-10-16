@@ -11,9 +11,9 @@ interface SendSupportEmailParams {
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Replace with the email address you verified with Resend
-const FROM_EMAIL = 'support@your-domain.com';
+const FROM_EMAIL = 'frutasma0512@gmail.com';
 // Replace with the email address where you want to receive support requests
-const TO_EMAIL = 'your-support-inbox@your-domain.com';
+const TO_EMAIL = 'frutasma0512@gmail.com';
 
 export async function sendSupportEmail({
   subject,
