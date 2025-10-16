@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 // Turn off DEV_MODE to enable Shopify authentication.
-const DEV_MODE = true;
+const DEV_MODE = false;
 const DEV_SHOP_DOMAIN = 'dev-store.myshopify.com';
 
 // In DEV_MODE, we can simulate different plans. In production, this comes from the database.
