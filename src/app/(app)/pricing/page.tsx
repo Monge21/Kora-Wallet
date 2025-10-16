@@ -9,62 +9,67 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Check, Star, Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { createSubscription } from '@/app/actions/shopify';
 import { useToast } from '@/hooks/use-toast';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
-type Plan = 'Basic' | 'Growth' | 'Pro';
+type PlanName = 'Basic' | 'Growth' | 'Pro';
+type BillingInterval = 'MONTHLY' | 'ANNUAL';
 
 const plans = [
   {
     name: 'Basic',
-    price: '$10',
-    priceFrequency: '/month',
-    description: 'Essential financial analysis and promotional tools to get you started.',
+    badge: 'BASIC',
+    monthlyPrice: 10,
+    description: 'Essential features to get started.',
     features: [
-      'Financial analysis',
-      '1 type of automatic promotion',
+      'Dashboard with key metrics',
+      'Discount code management',
+      'Basic AI analytics',
     ],
-    cta: 'Choose Basic',
+    cta: 'Select plan',
     highlighted: false,
   },
   {
     name: 'Growth',
-    price: '$25',
-    priceFrequency: '/month',
-    description: 'Advanced analytics and automation to accelerate your growth.',
+    badge: 'GROWTH',
+    monthlyPrice: 25,
+    description: 'For growing businesses.',
     features: [
-      'Advanced financial analysis',
-      'Sales forecasting',
-      'Discount automation',
+      'Everything in Basic',
+      'Sales Prediction AI',
+      'Pricing Suggestion AI',
     ],
-    cta: 'Choose Growth',
+    cta: 'Select plan',
     highlighted: true,
   },
   {
     name: 'Pro',
-    price: '$50',
-    priceFrequency: '/month',
-    description: 'The complete suite for scaling your business with intelligent insights.',
+    badge: 'PRO',
+    monthlyPrice: 50,
+    annualPrice: 480, // (50 * 12 * 0.8) = 480, 20% saving
+    description: 'Advanced AI and analytics.',
     features: [
-      'All Growth features',
-      'Multichannel integration',
-      'Smart alerts',
-      'Priority support',
+        'Everything in Growth',
+        'AOV Optimization AI',
+        'Advanced analytics',
     ],
-    cta: 'Choose Pro',
+    cta: 'Select plan',
     highlighted: false,
   },
 ];
 
-export default function PricingPage({ shop }: { shop: string }) {
-  const [selectedPlan, setSelectedPlan] = useState<Plan>('Growth');
-  const [isLoading, setIsLoading] = useState<Plan | null>(null);
+export default function PricingPage({ shop, plan: currentPlan }: { shop: string, plan: 'basic' | 'growth' | 'pro' }) {
+  const [isLoading, setIsLoading] = useState<PlanName | null>(null);
+  const [proBillingInterval, setProBillingInterval] = useState<BillingInterval>('MONTHLY');
   const { toast } = useToast();
 
-  const handlePlanSelection = async (planName: Plan) => {
+  const handlePlanSelection = async (planName: PlanName, interval: BillingInterval) => {
     if (!shop) {
       toast({
         variant: 'destructive',
@@ -73,10 +78,26 @@ export default function PricingPage({ shop }: { shop: string }) {
       });
       return;
     }
+    
+    let planId: 'BASIC' | 'GROWTH' | 'PRO';
+    switch (planName) {
+        case 'Basic':
+            planId = 'BASIC';
+            break;
+        case 'Growth':
+            planId = 'GROWTH';
+            break;
+        case 'Pro':
+            planId = 'PRO';
+            break;
+        default:
+            return;
+    }
 
     setIsLoading(planName);
     try {
-      const response = await createSubscription(planName.toUpperCase() as 'BASIC' | 'GROWTH' | 'PRO', shop);
+      const planInterval = interval === 'ANNUAL' ? 'ANNUAL' : 'EVERY_30_DAYS';
+      const response = await createSubscription(planId, shop, planInterval);
       if (response.confirmationUrl) {
         // Redirect the user to Shopify to confirm the subscription
         window.top!.location.href = response.confirmationUrl;
@@ -93,62 +114,73 @@ export default function PricingPage({ shop }: { shop: string }) {
       setIsLoading(null);
     }
   };
+  
+  const userIsOnPlan = (planName: PlanName) => {
+    if (!currentPlan) return false;
+    return currentPlan.toLowerCase() === planName.toLowerCase();
+  }
 
   return (
-    <div className="flex flex-col items-center p-4 md:p-6">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold tracking-tight">Find the perfect plan</h1>
-        <p className="text-lg text-muted-foreground mt-2">
-          Start for free and scale as you grow. All plans include a 7-day free trial.
-        </p>
-      </div>
-
+    <div className="flex flex-col items-center p-4 md:p-6 w-full">
       <div className="grid md:grid-cols-3 gap-8 max-w-6xl w-full">
         {plans.map((plan) => (
           <Card
             key={plan.name}
-            className={cn('flex flex-col', {
-              'border-primary ring-2 ring-primary': plan.highlighted,
+            className={cn('flex flex-col border-2', {
+              'border-primary/50': plan.highlighted,
+              'border-border': !plan.highlighted,
             })}
           >
-            <CardHeader className="items-center">
-              {plan.highlighted && (
-                <div className="flex items-center gap-2 text-primary font-semibold">
-                  <Star className="h-5 w-5" />
-                  Most Popular
+            <CardHeader className="items-start space-y-4">
+              <Badge variant={plan.highlighted ? 'default' : 'secondary'} className={cn({'bg-blue-600 text-white': plan.name === 'Growth'})}>{plan.badge}</Badge>
+              
+              {plan.name === 'Pro' ? (
+                 <RadioGroup value={proBillingInterval} onValueChange={(val) => setProBillingInterval(val as BillingInterval)} className="h-[72px] space-y-2">
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="MONTHLY" id="pro-monthly" />
+                        <Label htmlFor="pro-monthly" className="flex items-baseline gap-1 text-sm">
+                            USD <span className="text-xl font-bold text-foreground">${plan.monthlyPrice}</span>/month
+                        </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="ANNUAL" id="pro-annual" />
+                        <Label htmlFor="pro-annual" className="flex items-baseline gap-1 text-sm">
+                             USD <span className="text-xl font-bold text-foreground">${plan.annualPrice}</span>/year <span className="text-green-600 font-semibold">(save 20%)</span>
+                        </Label>
+                    </div>
+                </RadioGroup>
+              ) : (
+                 <div className="h-[72px]">
+                  <p className="text-sm text-muted-foreground">USD <span className="text-3xl font-bold text-foreground">${plan.monthlyPrice}</span>/month</p>
+                  <p className="text-blue-500 text-sm mt-2">{plan.description}</p>
                 </div>
               )}
-              <CardTitle className="text-2xl mt-2">{plan.name}</CardTitle>
-              <div className="flex items-baseline">
-                <span className="text-4xl font-bold">{plan.price}</span>
-                <span className="text-muted-foreground">{plan.priceFrequency}</span>
-              </div>
-              <CardDescription className="text-center h-10">{plan.description}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1">
-              <ul className="space-y-4">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
-                    <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-muted-foreground">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Button
+            <CardFooter className="pb-4">
+               <Button
                 className="w-full"
-                variant={plan.highlighted ? 'default' : 'outline'}
-                onClick={() => handlePlanSelection(plan.name as Plan)}
-                disabled={isLoading === plan.name}
+                variant={plan.highlighted ? 'default' : (userIsOnPlan(plan.name as PlanName) ? 'outline' : 'secondary')}
+                onClick={() => {
+                  if (plan.name === 'Pro') handlePlanSelection(plan.name as PlanName, proBillingInterval)
+                  else handlePlanSelection(plan.name as PlanName, 'MONTHLY')
+                }}
+                disabled={isLoading === plan.name || userIsOnPlan(plan.name as PlanName)}
               >
                 {isLoading === plan.name ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Please wait</>
                 ) : (
-                  plan.cta
+                  userIsOnPlan(plan.name as PlanName) ? 'Your current plan' : plan.cta
                 )}
               </Button>
             </CardFooter>
+            <CardContent className="flex-1 space-y-2 pt-4 border-t">
+              {plan.features.map((feature, index) => (
+                <div key={index} className="flex items-center gap-3 p-2 rounded-md bg-muted/30">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{feature}</span>
+                </div>
+              ))}
+            </CardContent>
           </Card>
         ))}
       </div>

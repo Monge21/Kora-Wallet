@@ -106,7 +106,7 @@ export function MainNav({ plan }: { plan: Plan }) {
     <SidebarMenu>
       {availableMenuItems.map((item) =>
         item.subItems ? (
-          <SidebarMenuItem key={item.label} asChild>
+          <SidebarMenuItem key={item.label}>
             <Collapsible
               defaultOpen={item.subItems.some((sub) =>
                 pathname.startsWith(sub.href!)
@@ -129,12 +129,10 @@ export function MainNav({ plan }: { plan: Plan }) {
                 <SidebarMenuSub>
                   {item.subItems.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.href}>
-                      <Link href={subItem.href!}>
-                        <SidebarMenuSubButton
-                          isActive={pathname === subItem.href}
-                        >
-                          <subItem.icon />
-                          <span>{subItem.label}</span>
+                      <Link href={subItem.href!} legacyBehavior={false}>
+                        <SidebarMenuSubButton isActive={pathname === subItem.href}>
+                            <subItem.icon />
+                            <span>{subItem.label}</span>
                         </SidebarMenuSubButton>
                       </Link>
                     </SidebarMenuSubItem>
@@ -144,8 +142,8 @@ export function MainNav({ plan }: { plan: Plan }) {
             </Collapsible>
           </SidebarMenuItem>
         ) : (
-          <SidebarMenuItem key={item.href} asChild>
-            <Link href={item.href!}>
+          <SidebarMenuItem key={item.href}>
+            <Link href={item.href!} legacyBehavior={false}>
               <SidebarMenuButton
                 isActive={pathname === item.href}
                 tooltip={item.label}

@@ -11,49 +11,74 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MainNav } from '@/components/main-nav';
 import { Logo } from '@/components/logo';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import Link from 'next/link';
-import { initializeFirebase } from '@/firebase/server';
-import { cookies } from 'next/headers';
 import React from 'react';
 import { redirect } from 'next/navigation';
+import { Chatbot } from '@/components/chatbot';
+import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
   title: 'Kora Wallet',
   description: 'AI-powered analytics and tools for your Shopify store.',
 };
 
-// Server-side function to get shop plan using firebase-admin
-async function getShopPlan(shopDomain: string | undefined): Promise<'basic' | 'growth' | 'pro'> {
-  if (!shopDomain) return 'basic'; // Default plan
-  try {
-    const { firestore } = initializeFirebase();
-    const shopsCollection = firestore.collection('shops');
-    const querySnapshot = await shopsCollection.where('domain', '==', shopDomain).get();
+// Turn off DEV_MODE to enable Shopify authentication.
+const DEV_MODE = true;
+const DEV_SHOP_DOMAIN = 'dev-store.myshopify.com';
 
-    if (querySnapshot.empty) {
-      console.warn(`Shop not found for domain: ${shopDomain}`);
-      return 'basic';
-    }
+// In DEV_MODE, we can simulate different plans. In production, this comes from the database.
+const DEV_PLAN: 'basic' | 'growth' | 'pro' = 'pro'; 
 
-    const shopData = querySnapshot.docs[0].data();
-    return shopData.plan || 'basic';
-  } catch (error) {
-    console.error('Error fetching shop plan:', error);
-    return 'basic';
+// This function simulates checking if a shop is newly installed.
+// In a real app, this would check a flag in your database.
+async function isNewInstall(shopDomain: string): Promise<boolean> {
+  if (DEV_MODE) {
+    // In dev mode, you can toggle this to test both flows.
+    // Set to `true` to simulate a new user being sent to /pricing.
+    // Set to `false` to simulate an existing user being sent to their content.
+    return false; 
   }
+  // Production logic would check a 'firstLogin' flag or similar in Firestore.
+  // For now, we assume reinstalling users are treated as new.
+  return true;
+}
+
+
+// Server-side function to get shop plan
+async function getShopPlan(shopDomain: string | undefined): Promise<'basic' | 'growth' | 'pro'> {
+  if (DEV_MODE) return DEV_PLAN;
+  if (!shopDomain) return 'basic'; // Default plan
+  // In production, this would fetch the plan from Firestore.
+  // This is a placeholder for that logic.
+  return 'basic'; 
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
-  const cookieStore = await cookies();
-  const shopDomain = cookieStore.get('shop')?.value;
+  
+  let shopDomain: string | undefined;
 
-  if (!shopDomain) {
-    // Redirect to install page if no shop cookie is present
-    redirect('/install');
+  if (DEV_MODE) {
+    shopDomain = DEV_SHOP_DOMAIN;
+  } else {
+    const cookieStore = await cookies();
+    shopDomain = cookieStore.get('shop')?.value;
+    if (!shopDomain) {
+      // In production, if there is no shop cookie, the user is unauthenticated.
+      // Redirect them to the main installation entry point.
+      // This URL would be provided by you in the Shopify Partner Dashboard.
+      redirect(process.env.SHOPIFY_APP_URL || '/');
+    }
+  }
+  
+  const newInstall = await isNewInstall(shopDomain);
+  const path = (await cookies()).get('next-path')?.value;
+  
+  // If it's a new install and they aren't already going to the pricing page, redirect them.
+  if (newInstall && path !== '/pricing') {
+     redirect('/pricing');
   }
 
   const plan = await getShopPlan(shopDomain);
@@ -92,11 +117,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <span className="text-xs text-muted-foreground capitalize">{plan} Plan</span>
               </div>
             </div>
-            <Link href={`/api/auth/logout`} className="group-data-[collapsible=icon]:hidden">
-              <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </Link>
           </div>
         </SidebarFooter>
       </Sidebar>
@@ -112,6 +132,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6">{childrenWithProps}</main>
+        <Chatbot shop={shopDomain} />
       </SidebarInset>
     </SidebarProvider>
   );

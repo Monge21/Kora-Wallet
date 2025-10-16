@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeFirebase } from '@/firebase/server';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { cookies } from 'next/headers';
 
 // Callback para instalar la app en Shopify
@@ -36,45 +36,54 @@ export async function GET(request: NextRequest) {
 
     // Inicializar Firebase Admin
     const { firestore } = initializeFirebase();
-
-    // ⚡ Usamos la línea de import que pediste, pero con Admin SDK
-    const shopsCollection = firestore.collection('shops');
+    const shopsCollection = collection(firestore, 'shops');
 
     // Verificar si la tienda ya existe
-    const q = shopsCollection.where('domain', '==', shop);
-    const querySnapshot = await q.get();
+    const q = query(shopsCollection, where('domain', '==', shop));
+    const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
       // Obtener información de la tienda desde Shopify
-      const shopDetailsResponse = await fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
+      const shopDetailsResponse = await fetch(`https://${shop}/admin/api/2024-04/shop.json`, {
         headers: { 'X-Shopify-Access-Token': accessToken },
       });
       const shopInfo = (await shopDetailsResponse.json()).shop;
 
       // Crear un nuevo documento en Firestore
-      await shopsCollection.add({
+      await addDoc(shopsCollection, {
         shopifyStoreId: shopInfo.id,
         name: shopInfo.name,
         domain: shop,
         accessToken,
         createdAt: serverTimestamp(),
+        plan: 'basic', // Default plan on install
+        chargeId: '',   // Default chargeId on install
       });
     } else {
-      // Si ya existe, puedes actualizar el access token si quieres
-      const docId = querySnapshot.docs[0].id;
-      // Ejemplo de actualización:
-      // await shopsCollection.doc(docId).update({ accessToken, updatedAt: serverTimestamp() });
+      // Si ya existe, actualiza el access token y la fecha de actualización
+      const docRef = querySnapshot.docs[0].ref;
+      await updateDoc(docRef, { 
+        accessToken, 
+        updatedAt: serverTimestamp(),
+        plan: 'basic', // Reset plan on reinstall
+        chargeId: '',   // Reset chargeId on reinstall
+      });
     }
 
     // Guardar el shop en una cookie segura para todas las páginas
-    (await cookies()).set('shop', shop, {
+    (await
+      // Guardar el shop en una cookie segura para todas las páginas
+      cookies()).set('shop', shop, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
     });
 
-    // Redirigir al dashboard
-    const redirectUrl = new URL(`${process.env.NEXT_PUBLIC_HOST}/dashboard`);
+    // Always redirect to the pricing page for new installs and re-installs.
+    const redirectUrl = new URL(`/pricing`, process.env.NEXT_PUBLIC_HOST);
+    redirectUrl.searchParams.set('shop', shop);
+
     return NextResponse.redirect(redirectUrl);
 
   } catch (error) {

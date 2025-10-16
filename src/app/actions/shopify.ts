@@ -1,14 +1,15 @@
-
 'use server';
 
 import { initializeFirebase } from '@/firebase/server';
 import { collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 
 const PLAN_DETAILS = {
-  BASIC: { name: 'Basic Plan', price: 10.0 },
-  GROWTH: { name: 'Growth Plan', price: 25.0 },
-  PRO: { name: 'Pro Plan', price: 50.0 },
+  BASIC: { name: 'Basic Plan', monthlyPrice: 10.0, annualPrice: 96.0 },
+  GROWTH: { name: 'Growth Plan', monthlyPrice: 25.0, annualPrice: 240.0 },
+  PRO: { name: 'Pro Plan', monthlyPrice: 50.0, annualPrice: 480.0 },
 };
+
+type BillingInterval = 'EVERY_30_DAYS' | 'ANNUAL';
 
 async function getShopData(shopDomain: string) {
   const { firestore } = initializeFirebase();
@@ -50,15 +51,30 @@ async function shopifyFetch(shopDomain: string, accessToken: string, query: stri
         console.error('Shopify API Errors:', JSON.stringify(result.errors, null, 2));
         throw new Error(`Shopify API call failed: ${result.errors[0].message}`);
     }
+    
+    if (result.data?.userErrors?.length) {
+        console.error('Shopify API User Errors:', JSON.stringify(result.data.userErrors, null, 2));
+        throw new Error(result.data.userErrors[0].message);
+    }
+    
+    if (result.data?.appSubscriptionCreate?.userErrors?.length) {
+        console.error('Shopify API User Errors:', JSON.stringify(result.data.appSubscriptionCreate.userErrors, null, 2));
+        throw new Error(result.data.appSubscriptionCreate.userErrors[0].message);
+    }
+
 
     return result.data;
 }
 
 
-export async function createSubscription(plan: 'BASIC' | 'GROWTH' | 'PRO', shopDomain: string) {
+export async function createSubscription(plan: 'BASIC' | 'GROWTH' | 'PRO', shopDomain: string, interval: BillingInterval) {
   try {
     const shop = await getShopData(shopDomain);
     const planInfo = PLAN_DETAILS[plan];
+    const isAnnual = interval === 'ANNUAL';
+
+    const price = isAnnual ? planInfo.annualPrice : planInfo.monthlyPrice;
+    const planName = `${planInfo.name} (${isAnnual ? 'Annual' : 'Monthly'})`;
 
     const mutation = `
       mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
@@ -74,18 +90,21 @@ export async function createSubscription(plan: 'BASIC' | 'GROWTH' | 'PRO', shopD
         }
       }
     `;
+    
+    // The return URL needs to include the shop domain to handle the callback correctly
+    const returnUrl = `${process.env.NEXT_PUBLIC_HOST}/api/auth/shopify/billing/callback?shop=${shopDomain}&plan=${plan.toLowerCase()}`;
 
     const variables = {
-      name: planInfo.name,
-      returnUrl: `${process.env.NEXT_PUBLIC_HOST}/api/auth/shopify/billing/callback?shop=${shopDomain}&plan=${plan}`,
-      test: true, // Use true for development. Change to false for production.
+      name: planName,
+      returnUrl: returnUrl,
+      test: process.env.NODE_ENV !== 'production', // Use test mode in development
       trialDays: 7,
       lineItems: [
         {
           plan: {
             appRecurringPricingDetails: {
-              price: { amount: planInfo.price, currencyCode: 'USD' },
-              interval: 'EVERY_30_DAYS',
+              price: { amount: price, currencyCode: 'USD' },
+              interval: interval,
             },
           },
         },

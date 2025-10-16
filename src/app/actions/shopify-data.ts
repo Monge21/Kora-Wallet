@@ -14,7 +14,7 @@ async function getShopData(shopDomain: string): Promise<ShopData> {
   const { firestore } = initializeFirebase();
   const shopsCollection = firestore.collection('shops');
   const querySnapshot = await shopsCollection.where('domain', '==', shopDomain).get();
-  
+
   if (querySnapshot.empty) {
     throw new Error(`Shop not found for domain: ${shopDomain}`);
   }
@@ -320,3 +320,4 @@ export async function createDiscountCode(shopDomain: string, discount: CreateDis
     return { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred' };
   }
 }
+
